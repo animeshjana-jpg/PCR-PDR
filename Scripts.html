@@ -1,0 +1,918 @@
+<script>
+// ============================================================
+// LMS DASHBOARD v8 — CLIENT SCRIPTS (COMPRESSION ENABLED)
+// Row: [id,agent,hub,role,region,am,rm,gm,cec,lbp,zone, ...modStats]
+// MODULES: [{idx, name, month}, …]  month = 'Jun-26' or 'Jul-26'
+// modStats index in row = 11 + module.idx
+// ============================================================
+
+const F = { id:0,agent:1,hub:2,role:3,region:4,am:5,rm:6,gm:7,cec:8,lbp:9,zone:10 };
+const MOD_OFFSET = 11;
+
+let ALL_ROWS = [];
+let MODULES  = [];
+let _timer   = null;
+let ACTIVE_TAB = 'overview';
+
+// ============================================================
+// INIT
+// ============================================================
+window.onload = function() {
+  showLoader(true, 'Loading dashboard data…');
+  google.script.run
+    .withSuccessHandler(function(s) {
+      if (s.isAdmin) {
+        const bar = document.getElementById('admin-bar');
+        if (bar) bar.style.display = 'flex';
+      }
+    }).withFailureHandler(function(){}).getSessionInfo();
+
+  google.script.run
+    .withSuccessHandler(onDataLoaded)
+    .withFailureHandler(handleError)
+    .loadDashboardData();
+};
+
+function onDataLoaded(data) {
+  showLoader(false);
+  if (data.error) { showError(data.error); return; }
+
+  MODULES = data.modules || [];
+  const dict = data.dict || {};
+
+  const getVal = (key, idx) => idx === -1 ? '' : dict[key][idx];
+  const mapMod = (v) => {
+    if (v === 'C') return 'Completed';
+    if (v === 'I') return 'In Progress';
+    if (v === 'N') return 'Not Started';
+    return '';
+  };
+
+  ALL_ROWS = (data.rows || []).map(r => [
+    r[0], r[1],
+    getVal('hub', r[2]), getVal('role', r[3]), getVal('region', r[4]),
+    getVal('am', r[5]),  getVal('rm', r[6]),   getVal('gm', r[7]),
+    getVal('cec', r[8]), getVal('lbp', r[9]),  getVal('zone', r[10]),
+    ...r.slice(11).map(mapMod)
+  ]);
+
+  document.getElementById('last-render').textContent =
+    'Loaded ' + new Date().toLocaleTimeString();
+
+  populateDropdowns();
+  populateDownloadModules();
+  populateHubSelect();
+  renderAll();
+}
+
+function reloadDashboard() {
+  showLoader(true, 'Reloading…');
+  google.script.run
+    .withSuccessHandler(onDataLoaded)
+    .withFailureHandler(handleError)
+    .loadDashboardData();
+}
+
+function adminRefresh() {
+  const overlay  = document.getElementById('refresh-overlay');
+  const resultEl = document.getElementById('refresh-result');
+  const spinner  = document.getElementById('ref-spinner');
+  const closeBtn = document.getElementById('ref-close');
+  const btn      = document.getElementById('btn-refresh');
+  overlay.classList.add('show');
+  resultEl.textContent=''; resultEl.className='refresh-result';
+  spinner.style.display='block'; closeBtn.style.display='none'; btn.disabled=true;
+  google.script.run
+    .withSuccessHandler(function(res){
+      spinner.style.display='none';
+      resultEl.textContent = res.message+(res.details?'\n'+res.details:'');
+      resultEl.className = 'refresh-result '+(res.success?'success':'error');
+      closeBtn.style.display='block'; btn.disabled=false;
+      if (res.success) {
+        setTimeout(function(){
+          closeRefreshOverlay();
+          showLoader(true,'Loading fresh data…');
+          google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(handleError).loadDashboardData();
+        }, 1800);
+      }
+    })
+    .withFailureHandler(function(e){
+      spinner.style.display='none';
+      resultEl.textContent='❌ '+e.message;
+      resultEl.className='refresh-result error';
+      closeBtn.style.display='block'; btn.disabled=false;
+    })
+    .refreshData();
+}
+function closeRefreshOverlay(){ document.getElementById('refresh-overlay').classList.remove('show'); }
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tab) {
+  ACTIVE_TAB = tab;
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelector('[data-tab="'+tab+'"]').classList.add('active');
+  if (tab === 'fm' && !FM_LOADED) {
+    FM_LOADED = true;
+    loadFMTab();
+  }
+}
+
+// ============================================================
+// RENDER ALL — debounced
+// ============================================================
+function renderAll() {
+  clearTimeout(_timer);
+  _timer = setTimeout(function(){
+    const ovRows = filterRows(ALL_ROWS, getOvFilters());
+    const drRows = filterRows(ALL_ROWS, getDrFilters());
+    renderOverview(ovRows, getOvFilters());
+    renderDrill(drRows, getDrFilters());
+  }, 200);
+}
+
+// ============================================================
+// FILTER HELPERS
+// ============================================================
+function g(id){ const e=document.getElementById(id); return e?e.value:'All'; }
+
+function getOvFilters() {
+  return { month:g('ov-month'), zone:g('ov-zone'), gm:g('ov-gm'), cec:g('ov-cec'), role:g('ov-role'),
+           region:'All', rm:'All', am:'All', lbp:'All' };
+}
+function getDrFilters() {
+  return { month:g('dr-month'), zone:g('dr-zone'), gm:g('dr-gm'), region:g('dr-region'),
+           rm:g('dr-rm'), am:g('dr-am'), lbp:g('dr-lbp'), cec:g('dr-cec'),
+           role:'All' };
+}
+function getDlFilters() {
+  return { month:g('dl-month'), zone:g('dl-zone'), gm:g('dl-gm'), region:g('dl-region'),
+           rm:g('dl-rm'), am:g('dl-am'), cec:g('dl-cec'), lbp:'All', role:'All' };
+}
+
+function filterRows(rows, f) {
+  return rows.filter(r => {
+    if (f.role && f.role !== 'All') {
+      const isWM = r[F.role] && r[F.role].toLowerCase().includes('wish');
+      if (f.role === 'Wishmaster' && !isWM) return false;
+      if (f.role === 'HMT' && isWM) return false;
+    }
+    if (f.zone   && f.zone   !== 'All' && r[F.zone]   !== f.zone)   return false;
+    if (f.gm     && f.gm     !== 'All' && r[F.gm]     !== f.gm)     return false;
+    if (f.region && f.region !== 'All' && r[F.region] !== f.region) return false;
+    if (f.rm     && f.rm     !== 'All' && r[F.rm]     !== f.rm)     return false;
+    if (f.am     && f.am     !== 'All' && r[F.am]     !== f.am)     return false;
+    if (f.lbp    && f.lbp    !== 'All' && r[F.lbp]    !== f.lbp)    return false;
+    if (f.cec    && f.cec    !== 'All' && r[F.cec]    !== f.cec)    return false;
+    return true;
+  });
+}
+
+function getVisibleModules(monthFilter) {
+  if (!monthFilter || monthFilter === 'All') return MODULES;
+  return MODULES.filter(m => m.month === monthFilter);
+}
+
+function resetTab(prefix) {
+  ['month','zone','gm','region','rm','am','lbp','cec','role'].forEach(k => {
+    const el = document.getElementById(prefix+'-'+k);
+    if (el) el.value = 'All';
+  });
+  renderAll();
+}
+
+// ============================================================
+// POPULATE DROPDOWNS
+// ============================================================
+function populateDropdowns() {
+  const uniq = key => [...new Set(ALL_ROWS.map(r=>r[F[key]]))].filter(v=>v&&v.trim()&&v!=='-'&&v!=='#N/A').sort();
+
+  const months  = [...new Set(MODULES.map(m=>m.month).filter(v=>v&&v.trim()))].sort();
+  const zones   = uniq('zone');
+  const gms     = uniq('gm');
+  const regions = uniq('region');
+  const rms     = uniq('rm');
+  const ams     = uniq('am');
+  const lbps    = uniq('lbp');
+  const cecs    = uniq('cec');
+
+  setOpts('ov-month', months, 'All Months');
+  setOpts('ov-zone',  zones,  'All Zones');
+  setOpts('ov-gm',    gms,    'All GMs');
+  setOpts('ov-cec',   cecs,   'All CEC');
+
+  setOpts('dr-month',  months,  'All Months');
+  setOpts('dr-zone',   zones,   'All Zones');
+  setOpts('dr-gm',     gms,     'All GMs');
+  setOpts('dr-region', regions, 'All Regions');
+  setOpts('dr-rm',     rms,     'All RMs');
+  setOpts('dr-am',     ams,     'All AMs');
+  setOpts('dr-lbp',    lbps,    'All LBP');
+  setOpts('dr-cec',    cecs,    'All CEC');
+
+  setOpts('dl-month',  months,  'All Months');
+  setOpts('dl-zone',   zones,   'All Zones');
+  setOpts('dl-gm',     gms,     'All GMs');
+  setOpts('dl-region', regions, 'All Regions');
+  setOpts('dl-rm',     rms,     'All RMs');
+  setOpts('dl-am',     ams,     'All AMs');
+  setOpts('dl-cec',    cecs,    'All CEC');
+}
+
+function setOpts(id, arr, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = '<option value="All">'+label+'</option>';
+  arr.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); });
+}
+
+// ============================================================
+// STAT HELPERS
+// ============================================================
+function modStats(rows, modIdx) {
+  let assigned=0,completed=0,inProgress=0,notStarted=0;
+  rows.forEach(r => {
+    const v = r[MOD_OFFSET+modIdx];
+    if (!v||!v.trim()) return;
+    assigned++;
+    const s=v.toLowerCase();
+    if(s==='completed') completed++;
+    else if(s==='in progress') inProgress++;
+    else notStarted++;
+  });
+  return { assigned, completed, inProgress, notStarted,
+           pct: assigned>0?Math.round(completed/assigned*100):null };
+}
+
+function pill(pct) {
+  if (pct===null||pct===undefined) return '<span class="pct-pill pct-na">—</span>';
+  const c=pct>=80?'pct-high':pct>=50?'pct-mid':'pct-low';
+  return '<span class="pct-pill '+c+'">'+pct+'%</span>';
+}
+function pillColor(pct) {
+  if (pct===null) return 'var(--text-muted)';
+  return pct>=80?'#0d9488':pct>=50?'#d97706':'#dc2626';
+}
+function isInvalid(v){ return !v||!v.trim()||v==='-'||v==='#N/A'||v==='N/A'; }
+function empty(cols,msg){ return '<tr><td colspan="'+cols+'" class="center muted">'+(msg||'No data')+'</td></tr>'; }
+
+// ============================================================
+// TAB 1: OVERVIEW
+// ============================================================
+function renderOverview(rows, f) {
+  const visMods  = getVisibleModules(f.month);
+
+  const effectiveRows = f.month && f.month !== 'All'
+    ? rows.filter(r => visMods.some(m => { const v=r[MOD_OFFSET+m.idx]; return v&&v.trim(); }))
+    : rows;
+
+  const stats    = visMods.map((m,i) => ({ ...m, ...modStats(effectiveRows, m.idx) }));
+  const withData = stats.filter(s => s.assigned > 0);
+  const total    = withData.length;
+  const avg      = total > 0 ? Math.round(withData.reduce((a,s)=>a+(s.pct||0),0)/total) : 0;
+
+  const uWM  = new Set(effectiveRows.filter(r=>r[F.role]&&r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
+  const uHMT = new Set(effectiveRows.filter(r=>!r[F.role]||!r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
+
+  document.getElementById('ov-total').textContent    = visMods.length;
+  document.getElementById('ov-avg').textContent      = total > 0 ? avg+'%' : '—';
+  document.getElementById('ov-wm-count').textContent  = uWM.toLocaleString();
+  document.getElementById('ov-hmt-count').textContent = uHMT.toLocaleString();
+
+  const tbody = document.getElementById('ov-tbody');
+  if (!stats.length) { tbody.innerHTML = empty(9,'No modules for selected filters'); return; }
+  tbody.innerHTML = stats.map((s,i) => `
+    <tr>
+      <td class="muted">${i+1}</td>
+      <td><strong>${s.name}</strong></td>
+      <td class="center" style="white-space:nowrap;color:var(--text-secondary)">${s.date || '—'}</td>
+      <td class="center" style="font-weight:500">${s.duration || '—'}</td>
+      <td class="center">${s.assigned > 0 ? s.assigned.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#0d9488">${s.assigned > 0 ? s.completed.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#d97706">${s.assigned > 0 ? s.inProgress.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#dc2626">${s.assigned > 0 ? s.notStarted.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center">${s.assigned > 0 ? pill(s.pct) : '<span class="pct-pill pct-na">—</span>'}</td>
+    </tr>`).join('');
+}
+
+// ============================================================
+// TAB 2: DETAILED VIEW
+// ============================================================
+function renderDrill(rows, f) {
+  const visMods = getVisibleModules(f.month);
+  const stats   = visMods.map(m => ({ ...m, ...modStats(rows, m.idx) }));
+  const withData = stats.filter(s => s.assigned > 0);
+
+  const effectiveRows = f.month && f.month !== 'All'
+    ? rows.filter(r => visMods.some(m => { const v=r[MOD_OFFSET+m.idx]; return v&&v.trim(); }))
+    : rows;
+
+  const overall  = withData.length>0 ? Math.round(withData.reduce((a,s)=>a+(s.pct||0),0)/withData.length) : 0;
+  const uUsers   = new Set(effectiveRows.map(r=>r[F.id]).filter(Boolean)).size;
+  const uWM      = new Set(effectiveRows.filter(r=>r[F.role]&&r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
+  const uHMT     = uUsers - uWM;
+
+  const ovEl = document.getElementById('dr-overall-pct');
+  ovEl.textContent = overall+'%'; ovEl.style.color = pillColor(overall);
+  document.getElementById('dr-total-modules').textContent = visMods.length;
+  document.getElementById('dr-unique-users').textContent  = uUsers.toLocaleString();
+  document.getElementById('dr-unique-wm').textContent     = uWM.toLocaleString();
+  document.getElementById('dr-unique-hmt').textContent    = uHMT.toLocaleString();
+
+  const grid = document.getElementById('dr-module-boxes');
+  grid.innerHTML = stats.map(s =>
+    `<div class="module-box">
+      <div class="module-box-name">${s.name}</div>
+      <div class="module-box-count">Assigned: <strong>${s.assigned.toLocaleString()}</strong></div>
+      <div class="module-box-pct" style="color:${pillColor(s.pct)}">${s.pct!==null?s.pct+'%':'—'}</div>
+    </div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;padding:10px">No data</div>';
+
+  const allZones    = ['North','South','East','West'];
+  const activeZones = f.zone && f.zone !== 'All'
+    ? [f.zone]
+    : allZones.filter(z => rows.some(r => r[F.zone] === z));
+
+  const thead  = document.getElementById('dr-zone-thead');
+  const zTbody = document.getElementById('dr-zone-tbody');
+  thead.innerHTML = `
+    <tr>
+      <th rowspan="2" style="width:36px">#</th>
+      <th rowspan="2" style="min-width:220px">Module Name</th>
+      ${activeZones.map(z=>`<th class="center" colspan="5">${z}</th>`).join('')}
+    </tr>
+    <tr>
+      ${activeZones.map(()=>`
+        <th class="center">Assigned</th><th class="center">Completed</th>
+        <th class="center">In Prog</th><th class="center">Not Start</th>
+        <th class="center">%</th>`).join('')}
+    </tr>`;
+
+  if (!stats.length) { zTbody.innerHTML = empty(2+activeZones.length*5,'No data'); }
+  else {
+    zTbody.innerHTML = stats.map((s,i) => {
+      const cells = activeZones.map(z => {
+        const zr  = rows.filter(r=>r[F.zone]===z);
+        const zs  = modStats(zr, s.idx);
+        return `<td class="center">${zs.assigned||0}</td>
+                <td class="center" style="color:#0d9488">${zs.completed||0}</td>
+                <td class="center" style="color:#d97706">${zs.inProgress||0}</td>
+                <td class="center" style="color:#dc2626">${zs.notStarted||0}</td>
+                <td class="center">${pill(zs.pct)}</td>`;
+      }).join('');
+      return `<tr><td class="muted">${i+1}</td><td><strong>${s.name}</strong></td>${cells}</tr>`;
+    }).join('');
+  }
+
+  renderGroupTbody('dr-gm-tbody',     groupByField(rows, F.gm, visMods));
+  renderGroupTbody('dr-region-tbody', groupByField(rows, F.region, visMods));
+  renderGroupTbody('dr-rm-tbody',     groupByField(rows, F.rm, visMods));
+  renderGroupTbody('dr-am-tbody',     groupByField(rows, F.am, visMods));
+  renderGroupTbody('dr-lbp-tbody',    groupByField(rows, F.lbp, visMods));
+  renderGroupTbody('dr-cec-tbody',    groupByField(rows, F.cec, visMods));
+
+  const hubMap = {};
+  rows.forEach(r => {
+    const h = r[F.hub];
+    if (isInvalid(h)) return;
+    if (!hubMap[h]) hubMap[h] = { hub:h, zone:r[F.zone], assigned:0, comp:0, inp:0, ns:0 };
+    visMods.forEach(m => {
+      const v = r[MOD_OFFSET+m.idx];
+      if (!v||!v.trim()) return;
+      hubMap[h].assigned++;
+      const s=v.toLowerCase();
+      if(s==='completed') hubMap[h].comp++;
+      else if(s==='in progress') hubMap[h].inp++;
+      else hubMap[h].ns++;
+    });
+  });
+  const hubList = Object.values(hubMap)
+    .map(h=>({...h,pct:h.assigned>0?Math.round(h.comp/h.assigned*100):null}))
+    .sort((a,b)=>(b.pct||0)-(a.pct||0));
+  const hubTbody = document.getElementById('dr-hub-tbody');
+  hubTbody.innerHTML = hubList.length ? hubList.map((h,i)=>`
+    <tr>
+      <td class="muted">${i+1}</td><td>${h.hub}</td><td>${h.zone||'—'}</td>
+      <td class="center">${h.assigned.toLocaleString()}</td>
+      <td class="center" style="color:#0d9488">${h.comp.toLocaleString()}</td>
+      <td class="center" style="color:#d97706">${h.inp.toLocaleString()}</td>
+      <td class="center" style="color:#dc2626">${h.ns.toLocaleString()}</td>
+      <td class="center">${pill(h.pct)}</td>
+    </tr>`).join('') : empty(8,'No data');
+}
+
+function groupByField(rows, fieldIdx, visMods) {
+  const groups = {};
+  rows.forEach(r => {
+    const v = r[fieldIdx];
+    if (isInvalid(v)) return;
+    if (!groups[v]) groups[v] = [];
+    groups[v].push(r);
+  });
+  return Object.entries(groups).map(([name, gr]) => {
+    const audience = new Set(gr.map(r=>r[F.id]).filter(Boolean)).size;
+    const pendingIds = new Set();
+    gr.forEach(r => {
+      visMods.forEach(m => {
+        const v = r[MOD_OFFSET+m.idx];
+        if (v && v.trim() && v.toLowerCase() !== 'completed') pendingIds.add(r[F.id]);
+      });
+    });
+    const pcts = visMods.map(m => modStats(gr, m.idx)).filter(s=>s.assigned>0).map(s=>s.pct||0);
+    const avg  = pcts.length > 0 ? Math.round(pcts.reduce((a,p)=>a+p,0)/pcts.length) : null;
+    return { name, modules:visMods.length, audience, pending:pendingIds.size, avgPct:avg };
+  }).sort((a,b)=>(b.avgPct||0)-(a.avgPct||0));
+}
+
+function renderGroupTbody(id, data) {
+  const tbody = document.getElementById(id);
+  if (!tbody) return;
+  tbody.innerHTML = data.length ? data.map((item,i)=>`
+    <tr>
+      <td class="muted">${i+1}</td><td>${item.name}</td>
+      <td class="center">${item.modules}</td>
+      <td class="center">${item.audience.toLocaleString()}</td>
+      <td class="center" style="color:#dc2626">${item.pending.toLocaleString()}</td>
+      <td class="center">${pill(item.avgPct)}</td>
+    </tr>`).join('') : empty(6,'No data');
+}
+
+// ============================================================
+// LIVE EMPLOYEE SEARCH — exact ID or partial name
+// ============================================================
+function liveSearch(query) {
+  const q      = (query||'').trim();
+  const qLower = q.toLowerCase();
+  const stats  = document.getElementById('live-search-stats');
+  const res    = document.getElementById('live-search-results');
+  if (q.length < 2) { stats.textContent = q?'Type at least 2 characters…':''; res.innerHTML=''; return; }
+
+  const matched = {};
+  ALL_ROWS.forEach(r => {
+    const idMatch   = r[F.id].toLowerCase() === qLower;
+    const nameMatch = r[F.agent].toLowerCase().includes(qLower);
+    if (!idMatch && !nameMatch) return;
+    const key = r[F.id]||r[F.agent];
+    if (!matched[key]) matched[key]={id:r[F.id],name:r[F.agent],hub:r[F.hub],zone:r[F.zone],gm:r[F.gm],modules:[]};
+    MODULES.forEach((m,i) => {
+      const v = r[MOD_OFFSET+i];
+      if (!v||!v.trim()) return;
+      if (!matched[key].modules.find(x=>x.name===m.name))
+        matched[key].modules.push({name:m.name,stat:v});
+    });
+  });
+
+  const all  = Object.values(matched).filter(e=>e.modules.length>0);
+  const show = all.slice(0,50);
+  stats.textContent = all.length===0 ? 'No results found'
+    : 'Showing '+Math.min(all.length,50)+' of '+all.length+' employee(s)';
+
+  const icon  = s=>s.toLowerCase()==='completed'?'✅':s.toLowerCase()==='in progress'?'🔄':'❌';
+  const color = s=>s.toLowerCase()==='completed'?'#0d9488':s.toLowerCase()==='in progress'?'#d97706':'#dc2626';
+
+  res.innerHTML = show.map(emp => {
+    const tags = emp.modules.map(m=>
+      `<div class="emp-mod-tag">
+        <span>${m.name}</span>
+        <span style="color:${color(m.stat)};font-weight:600">${icon(m.stat)} ${m.stat}</span>
+       </div>`).join('');
+    return `<div class="search-emp-card">
+      <div class="emp-header"><div>
+        <div class="emp-name">👤 ${emp.name||'—'}</div>
+        <div class="emp-meta">ID: ${emp.id||'—'} &nbsp;|&nbsp; Hub: ${emp.hub||'—'} &nbsp;|&nbsp; Zone: ${emp.zone||'—'} &nbsp;|&nbsp; GM: ${emp.gm||'—'}</div>
+      </div></div>
+      <div class="emp-modules">${tags}</div>
+    </div>`;
+  }).join('');
+}
+function clearLiveSearch() {
+  const inp=document.getElementById('live-search-input');
+  if(inp) inp.value='';
+  document.getElementById('live-search-stats').textContent='';
+  document.getElementById('live-search-results').innerHTML='';
+}
+
+// ============================================================
+// HUB WISE SEARCH (CASE-INSENSITIVE)
+// ============================================================
+function populateHubSelect() {
+  const sel = document.getElementById('hub-select');
+  if (!sel) return;
+  const hubs = [...new Set(ALL_ROWS.map(r => r[F.hub] ? r[F.hub].toUpperCase() : '').filter(v => v && v.trim()))].sort();
+  hubs.forEach(h => {
+    const o = document.createElement('option');
+    o.value = h; o.textContent = h; sel.appendChild(o);
+  });
+}
+
+function renderHubTable(hub) {
+  const stats = document.getElementById('hub-search-stats');
+  const res   = document.getElementById('hub-search-results');
+  if (!hub) { stats.textContent=''; res.innerHTML=''; return; }
+
+  const targetHub = hub.toUpperCase();
+  const hubRows = ALL_ROWS.filter(r => r[F.hub] && r[F.hub].toUpperCase() === targetHub);
+
+  if (!hubRows.length) { stats.textContent='No employees found for this hub.'; res.innerHTML=''; return; }
+
+  stats.textContent = hubRows.length+' employee(s) in '+hub;
+
+  const statusCell = (v, colIdx) => {
+    const stickyStyle = colIdx === 0
+      ? 'position:sticky;left:0;z-index:1;background:#fff;min-width:100px;white-space:nowrap'
+      : colIdx === 1
+      ? 'position:sticky;left:100px;z-index:1;background:#fff;min-width:150px;white-space:nowrap;border-right:2px solid var(--border-strong)'
+      : 'width:120px;min-width:120px;max-width:120px';
+    if (!v||!v.trim()) return `<td class="center muted" style="${stickyStyle}">—</td>`;
+    const s = v.toLowerCase();
+    if (s==='completed')   return `<td class="center" style="${stickyStyle};color:#0d9488;font-weight:600">✅ Completed</td>`;
+    if (s==='in progress') return `<td class="center" style="${stickyStyle};color:#d97706;font-weight:600">🔄 In Progress</td>`;
+    return `<td class="center" style="${stickyStyle};color:#dc2626;font-weight:600">❌ Not Started</td>`;
+  };
+
+  const modHeaderStyle = 'width:120px;min-width:120px;max-width:120px;white-space:normal;word-break:break-word;text-align:center;vertical-align:middle;line-height:1.3;padding:8px 6px';
+  const headerCols = MODULES.map(m=>`<th style="${modHeaderStyle}">${m.name}</th>`).join('');
+
+  const bodyRows = hubRows.map(r => {
+    const id   = r[F.id]||'—';
+    const name = r[F.agent]||'—';
+    const modCells = MODULES.map(m => statusCell(r[MOD_OFFSET+m.idx], 2)).join('');
+    return `<tr>
+      <td style="position:sticky;left:0;z-index:1;background:#fff;min-width:100px;white-space:nowrap;font-weight:500">${id}</td>
+      <td style="position:sticky;left:100px;z-index:1;background:#fff;min-width:150px;white-space:nowrap;border-right:2px solid var(--border-strong)">${name}</td>
+      ${modCells}
+    </tr>`;
+  }).join('');
+
+  res.innerHTML = `
+    <div style="overflow-x:auto;overflow-y:auto;max-height:520px;margin-top:10px;border:1px solid var(--border-color);border-radius:var(--radius)">
+      <table style="border-collapse:collapse;table-layout:fixed;width:max-content">
+        <thead style="position:sticky;top:0;z-index:5;background:#f9fafb">
+          <tr>
+            <th style="position:sticky;left:0;z-index:4;background:#f9fafb;min-width:100px;text-align:left;padding:9px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;border-bottom:1px solid var(--border-color)">Employee ID</th>
+            <th style="position:sticky;left:100px;z-index:4;background:#f9fafb;min-width:150px;text-align:left;padding:9px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;border-bottom:1px solid var(--border-color);border-right:2px solid var(--border-strong)">Name</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function clearHubSearch() {
+  const sel = document.getElementById('hub-select');
+  if (sel) sel.value = '';
+  document.getElementById('hub-search-stats').textContent='';
+  document.getElementById('hub-search-results').innerHTML='';
+}
+
+// ============================================================
+// DOWNLOAD
+// ============================================================
+function populateDownloadModules() {
+  const container = document.getElementById('dl-module-checks');
+  if (!container) return;
+  container.innerHTML =
+    `<label class="checkbox-item" style="border-color:var(--fk-blue)">
+       <input type="checkbox" id="dl-all" onclick="toggleAllMods(this)" checked>
+       <strong>Select All</strong>
+     </label>` +
+    MODULES.map((m,i)=>
+      `<label class="checkbox-item">
+         <input type="checkbox" class="dl-mod" value="${m.name}" checked>
+         ${i+1}. ${m.name}
+       </label>`).join('');
+}
+function toggleAllMods(master) { document.querySelectorAll('.dl-mod').forEach(cb=>cb.checked=master.checked); }
+
+function executeDownload() {
+  const mods = [...document.querySelectorAll('.dl-mod:checked')].map(c=>c.value);
+  const stat = [];
+  if(document.getElementById('dl-completed').checked)  stat.push('Completed');
+  if(document.getElementById('dl-inprogress').checked) stat.push('In Progress');
+  if(document.getElementById('dl-notstarted').checked) stat.push('Not Started');
+  if(!mods.length){alert('Select at least one module.');return;}
+  if(!stat.length){alert('Select at least one status.');return;}
+
+  const btn=document.getElementById('btn-dl-exec');
+  const lbl=document.getElementById('dl-status');
+  btn.disabled=true; lbl.textContent='⏳ Generating… please wait.';
+  showLoader(true,'Building export file…');
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      showLoader(false); btn.disabled=false;
+      if(res.error){lbl.textContent='❌ '+res.error;return;}
+      lbl.innerHTML = `✅ ${res.count.toLocaleString()} records!
+        <a href="${res.url}" target="_blank" style="color:#0d9488;font-weight:700;margin-left:6px;text-decoration:underline;">
+          Open "${res.name}"
+        </a>
+        <span style="color:var(--text-muted);font-size:11px;margin-left:6px;">
+          (Click "Open with Google Sheets" at the top of the preview)
+        </span>`;
+    })
+    .withFailureHandler(function(e){ showLoader(false); btn.disabled=false; lbl.textContent='❌ '+e.message; })
+    .generateDownload(getDlFilters(), mods, stat);
+}
+
+// ============================================================
+// FM MICRO MODULES TAB
+// FM Row (expanded): [id, agent, gm, rm, cec, hubzone, ...modStats]
+// ============================================================
+const FM_F = { ID:0, AGENT:1, GM:2, RM:3, CEC:4, HUBZONE:5 };
+const FM_MOD_OFFSET = 6;
+
+let FM_ALL_ROWS   = [];
+let FM_MODULES    = [];
+let FM_ACTIVE_DIM = 'gm';
+let FM_LOADED     = false;
+
+function loadFMTab() {
+  showLoader(true, 'Loading FM Micro Module data…');
+  google.script.run
+    .withSuccessHandler(onFMDataLoaded)
+    .withFailureHandler(function(e) {
+      showLoader(false);
+      showError('FM Data Error: ' + (e.message || String(e)));
+    })
+    .loadFMDashboardData();
+}
+
+function onFMDataLoaded(data) {
+  showLoader(false);
+  if (data.error) { showError(data.error); return; }
+
+  FM_MODULES = data.modules || [];
+  const dict = data.dict || {};
+  const getVal = (key, idx) => idx === -1 ? '' : (dict[key] ? dict[key][idx] : '');
+  const mapMod = v => v==='C'?'Completed':v==='I'?'In Progress':v==='N'?'Not Started':'';
+
+  FM_ALL_ROWS = (data.rows || []).map(r => [
+    r[0], r[1],
+    getVal('gm',      r[2]),
+    getVal('rm',      r[3]),
+    getVal('cec',     r[4]),
+    getVal('hubzone', r[5]),
+    ...r.slice(6).map(mapMod)
+  ]);
+
+  populateFMDropdowns();
+  populateFMHubSelect();
+  renderFM();
+}
+
+function getFMFilters() {
+  return {
+    gm:      g('fm-gm'),
+    rm:      g('fm-rm'),
+    cec:     g('fm-cec'),
+    hubzone: g('fm-hubzone')
+  };
+}
+
+function filterFMRows(rows, f) {
+  return rows.filter(r => {
+    if (f.gm      && f.gm      !== 'All' && r[FM_F.GM]      !== f.gm)      return false;
+    if (f.rm      && f.rm      !== 'All' && r[FM_F.RM]       !== f.rm)      return false;
+    if (f.cec     && f.cec     !== 'All' && r[FM_F.CEC]      !== f.cec)     return false;
+    if (f.hubzone && f.hubzone !== 'All' && r[FM_F.HUBZONE]  !== f.hubzone) return false;
+    return true;
+  });
+}
+
+function renderFM() {
+  const f    = getFMFilters();
+  const rows = filterFMRows(FM_ALL_ROWS, f);
+
+  const uUsers   = new Set(rows.map(r => r[FM_F.ID]).filter(Boolean)).size;
+  const stats    = FM_MODULES.map(m => ({ ...m, ...fmModStats(rows, m.idx) }));
+  const withData = stats.filter(s => s.assigned > 0);
+  const avg      = withData.length > 0
+    ? Math.round(withData.reduce((a, s) => a + (s.pct || 0), 0) / withData.length)
+    : 0;
+
+  document.getElementById('fm-kpi-modules').textContent = FM_MODULES.length;
+  document.getElementById('fm-kpi-avg').textContent     = withData.length > 0 ? avg + '%' : '—';
+  document.getElementById('fm-kpi-users').textContent   = uUsers.toLocaleString();
+
+  renderFMModuleTable(stats);
+  renderFMDimension(FM_ACTIVE_DIM, rows);
+}
+
+function fmModStats(rows, modIdx) {
+  let assigned=0,completed=0,inProgress=0,notStarted=0;
+  rows.forEach(r => {
+    const v = r[FM_MOD_OFFSET + modIdx];
+    if (!v || !v.trim()) return;
+    assigned++;
+    const s = v.toLowerCase();
+    if (s === 'completed') completed++;
+    else if (s === 'in progress') inProgress++;
+    else notStarted++;
+  });
+  return { assigned, completed, inProgress, notStarted,
+           pct: assigned > 0 ? Math.round(completed / assigned * 100) : null };
+}
+
+function renderFMModuleTable(stats) {
+  const tbody = document.getElementById('fm-mod-tbody');
+  if (!tbody) return;
+  if (!stats.length) { tbody.innerHTML = empty(7, 'No modules found'); return; }
+  tbody.innerHTML = stats.map((s, i) => `
+    <tr>
+      <td class="muted">${i+1}</td>
+      <td><strong>${s.name}</strong></td>
+      <td class="center">${s.assigned > 0 ? s.assigned.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#0d9488">${s.assigned > 0 ? s.completed.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#d97706">${s.assigned > 0 ? s.inProgress.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center" style="color:#dc2626">${s.assigned > 0 ? s.notStarted.toLocaleString() : '<span class="muted">—</span>'}</td>
+      <td class="center">${s.assigned > 0 ? pill(s.pct) : '<span class="pct-pill pct-na">—</span>'}</td>
+    </tr>`).join('');
+}
+
+function switchFMDim(dim, btn) {
+  FM_ACTIVE_DIM = dim;
+  document.querySelectorAll('.dim-tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const rows = filterFMRows(FM_ALL_ROWS, getFMFilters());
+  renderFMDimension(dim, rows);
+}
+
+function renderFMDimension(dim, rows) {
+  const fieldMap = { gm: FM_F.GM, rm: FM_F.RM, cec: FM_F.CEC, hubzone: FM_F.HUBZONE };
+  const labelMap = { gm: 'GM', rm: 'RM', cec: 'CEC', hubzone: 'Hub Zone' };
+  const fieldIdx = fieldMap[dim];
+  const label    = labelMap[dim];
+
+  const thead = document.getElementById('fm-dim-thead');
+  const tbody = document.getElementById('fm-dim-tbody');
+
+  thead.innerHTML = `<tr>
+    <th style="width:36px">#</th>
+    <th>${label}</th>
+    <th class="center">Total</th>
+    <th class="center" style="color:#0d9488">Completed</th>
+    <th class="center" style="color:#d97706">In-Progress</th>
+    <th class="center" style="color:#dc2626">Not Started</th>
+    <th class="center" style="min-width:180px">Completion %</th>
+  </tr>`;
+
+  const groups = {};
+  rows.forEach(r => {
+    const v = r[fieldIdx];
+    if (isInvalid(v)) return;
+    if (!groups[v]) groups[v] = [];
+    groups[v].push(r);
+  });
+
+  const items = Object.entries(groups).map(([name, gr]) => {
+    let assigned=0, completed=0, inProgress=0, notStarted=0;
+    gr.forEach(r => {
+      FM_MODULES.forEach(m => {
+        const v = r[FM_MOD_OFFSET + m.idx];
+        if (!v || !v.trim()) return;
+        assigned++;
+        const s = v.toLowerCase();
+        if (s === 'completed') completed++;
+        else if (s === 'in progress') inProgress++;
+        else notStarted++;
+      });
+    });
+    const pct = assigned > 0 ? Math.round(completed / assigned * 100) : null;
+    return { name, assigned, completed, inProgress, notStarted, pct };
+  }).sort((a, b) => (b.pct || 0) - (a.pct || 0));
+
+  if (!items.length) { tbody.innerHTML = empty(7, 'No data'); return; }
+
+  tbody.innerHTML = items.map((item, i) => {
+    const pct      = item.pct;
+    const barColor = pct !== null ? (pct >= 80 ? '#0d9488' : pct >= 50 ? '#d97706' : '#dc2626') : '#9ca3af';
+    const barCell  = pct !== null
+      ? `<div style="display:flex;align-items:center;gap:10px;padding-right:8px">
+           <div style="flex:1;background:#e5e7eb;border-radius:4px;height:6px;min-width:80px">
+             <div style="width:${pct}%;background:${barColor};border-radius:4px;height:6px;transition:width 0.4s"></div>
+           </div>
+           <span style="color:${barColor};font-weight:600;min-width:36px;text-align:right;font-size:12px">${pct}%</span>
+         </div>`
+      : '<span class="muted">—</span>';
+    return `<tr>
+      <td class="muted">${i+1}</td>
+      <td><strong>${item.name}</strong></td>
+      <td class="center">${item.assigned.toLocaleString()}</td>
+      <td class="center" style="color:#0d9488">${item.completed.toLocaleString()}</td>
+      <td class="center" style="color:#d97706">${item.inProgress.toLocaleString()}</td>
+      <td class="center" style="color:#dc2626">${item.notStarted.toLocaleString()}</td>
+      <td>${barCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+function populateFMDropdowns() {
+  const uniq = fieldIdx => [...new Set(FM_ALL_ROWS.map(r => r[fieldIdx]))].filter(v => v && v.trim() && v !== '-' && v !== '#N/A').sort();
+  setOpts('fm-gm',      uniq(FM_F.GM),      'All GMs');
+  setOpts('fm-rm',      uniq(FM_F.RM),       'All RMs');
+  setOpts('fm-cec',     uniq(FM_F.CEC),      'All CEC');
+  setOpts('fm-hubzone', uniq(FM_F.HUBZONE),  'All HubZones');
+}
+
+function populateFMHubSelect() {
+  const sel = document.getElementById('fm-hub-select');
+  if (!sel) return;
+  const hubs = [...new Set(FM_ALL_ROWS.map(r => r[FM_F.HUBZONE] ? r[FM_F.HUBZONE].toUpperCase() : '').filter(v => v && v.trim()))].sort();
+  sel.innerHTML = '<option value="">— Select a Hub Zone —</option>';
+  hubs.forEach(h => {
+    const o = document.createElement('option');
+    o.value = h; o.textContent = h; sel.appendChild(o);
+  });
+}
+
+function renderFMHubTable(hub) {
+  const stats = document.getElementById('fm-hub-stats');
+  const res   = document.getElementById('fm-hub-results');
+  if (!hub) {
+    stats.textContent = '';
+    res.innerHTML = '<div class="fm-hub-placeholder">Select a hub above to view employee details</div>';
+    return;
+  }
+
+  const targetHub = hub.toUpperCase();
+  const hubRows   = FM_ALL_ROWS.filter(r => r[FM_F.HUBZONE] && r[FM_F.HUBZONE].toUpperCase() === targetHub);
+
+  if (!hubRows.length) { stats.textContent='No employees found for this hub zone.'; res.innerHTML=''; return; }
+
+  stats.textContent = hubRows.length + ' employee(s) in ' + hub;
+
+  const statusCell = (v, colIdx) => {
+    const stickyStyle = colIdx === 0
+      ? 'position:sticky;left:0;z-index:1;background:#fff;min-width:100px;white-space:nowrap'
+      : colIdx === 1
+      ? 'position:sticky;left:100px;z-index:1;background:#fff;min-width:150px;white-space:nowrap;border-right:2px solid var(--border-strong)'
+      : 'width:120px;min-width:120px;max-width:120px';
+    if (!v || !v.trim()) return `<td class="center muted" style="${stickyStyle}">—</td>`;
+    const s = v.toLowerCase();
+    if (s === 'completed')   return `<td class="center" style="${stickyStyle};color:#0d9488;font-weight:600">✅ Completed</td>`;
+    if (s === 'in progress') return `<td class="center" style="${stickyStyle};color:#d97706;font-weight:600">🔄 In Progress</td>`;
+    return `<td class="center" style="${stickyStyle};color:#dc2626;font-weight:600">❌ Not Started</td>`;
+  };
+
+  const modHeaderStyle = 'width:120px;min-width:120px;max-width:120px;white-space:normal;word-break:break-word;text-align:center;vertical-align:middle;line-height:1.3;padding:8px 6px';
+  const headerCols = FM_MODULES.map(m => `<th style="${modHeaderStyle}">${m.name}</th>`).join('');
+
+  const bodyRows = hubRows.map(r => {
+    const id       = r[FM_F.ID]    || '—';
+    const name     = r[FM_F.AGENT] || '—';
+    const modCells = FM_MODULES.map(m => statusCell(r[FM_MOD_OFFSET + m.idx], 2)).join('');
+    return `<tr>
+      <td style="position:sticky;left:0;z-index:1;background:#fff;min-width:100px;white-space:nowrap;font-weight:500">${id}</td>
+      <td style="position:sticky;left:100px;z-index:1;background:#fff;min-width:150px;white-space:nowrap;border-right:2px solid var(--border-strong)">${name}</td>
+      ${modCells}
+    </tr>`;
+  }).join('');
+
+  res.innerHTML = `
+    <div style="overflow-x:auto;overflow-y:auto;max-height:520px;margin-top:10px;border:1px solid var(--border-color);border-radius:var(--radius)">
+      <table style="border-collapse:collapse;table-layout:fixed;width:max-content">
+        <thead style="position:sticky;top:0;z-index:5;background:#f9fafb">
+          <tr>
+            <th style="position:sticky;left:0;z-index:4;background:#f9fafb;min-width:100px;text-align:left;padding:9px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;border-bottom:1px solid var(--border-color)">Employee ID</th>
+            <th style="position:sticky;left:100px;z-index:4;background:#f9fafb;min-width:150px;text-align:left;padding:9px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;border-bottom:1px solid var(--border-color);border-right:2px solid var(--border-strong)">Name</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function clearFMHubSearch() {
+  const sel = document.getElementById('fm-hub-select');
+  if (sel) sel.value = '';
+  document.getElementById('fm-hub-stats').textContent = '';
+  document.getElementById('fm-hub-results').innerHTML = '<div class="fm-hub-placeholder">Select a hub above to view employee details</div>';
+}
+
+function resetFMTab() {
+  ['gm','rm','cec','hubzone'].forEach(k => {
+    const el = document.getElementById('fm-' + k);
+    if (el) el.value = 'All';
+  });
+  renderFM();
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function showLoader(v,msg){
+  document.getElementById('global-loader').classList.toggle('show',v);
+  if(msg) document.getElementById('loader-msg').textContent=msg;
+}
+function handleError(e){ showLoader(false); showError('Error: '+(e.message||String(e))); }
+function showError(msg){
+  const main=document.querySelector('.main-content');
+  let b=document.getElementById('_err_banner');
+  if(!b){b=document.createElement('div');b.id='_err_banner';b.className='error-banner';main.insertBefore(b,main.firstChild);}
+  b.textContent=msg;
+}
+</script>

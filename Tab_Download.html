@@ -1,0 +1,86 @@
+<!-- TAB 3: SEARCH & DOWNLOAD -->
+
+<!-- LIVE EMPLOYEE SEARCH -->
+<div class="search-section">
+  <div class="section-heading" style="margin-top:0">🔍 Employee Search</div>
+  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+    Enter exact Employee ID <em>or</em> partial Name — blank modules excluded.
+  </p>
+  <div class="live-search-bar">
+    <input type="text" id="live-search-input" class="live-search-input"
+           placeholder="Exact Employee ID or partial Name…"
+           oninput="liveSearch(this.value)"/>
+    <button class="btn-clear-search" onclick="clearLiveSearch()">✕ Clear</button>
+  </div>
+  <div id="live-search-stats" class="live-search-stats"></div>
+  <div id="live-search-results" class="live-search-results"></div>
+</div>
+
+<!-- HUB WISE SEARCH -->
+<div class="search-section">
+  <div class="section-heading" style="margin-top:0">🏭 Hub Wise Search</div>
+  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+    Select a hub to see all employees and their module status.
+    Blank = not assigned (shown as <strong>—</strong>).
+  </p>
+  <div class="live-search-bar" style="align-items:center;gap:12px">
+    <select id="hub-select" class="live-search-input" style="max-width:340px;padding:9px 14px;font-size:13px"
+            onchange="renderHubTable(this.value)">
+      <option value="">— Select a Hub —</option>
+    </select>
+    <button class="btn-clear-search" onclick="clearHubSearch()">✕ Clear</button>
+  </div>
+  <div id="hub-search-stats" class="live-search-stats"></div>
+  <div id="hub-search-results" class="live-search-results" style="overflow-x:auto"></div>
+</div>
+
+<!-- BULK DOWNLOAD -->
+<div class="download-section">
+  <div class="section-heading" style="margin-top:0">⬇️ Bulk Download by Filter</div>
+  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+    Blank (not assigned) rows are always excluded from the export.
+  </p>
+
+  <div class="filter-bar" style="margin-bottom:16px">
+    <div class="filter-group"><label>Month</label>
+      <select id="dl-month"><option value="All">All Months</option></select></div>
+    <div class="filter-group"><label>Zone</label>
+      <select id="dl-zone"><option value="All">All Zones</option></select></div>
+    <div class="filter-group"><label>GM</label>
+      <select id="dl-gm"><option value="All">All GMs</option></select></div>
+    <div class="filter-group"><label>Region</label>
+      <select id="dl-region"><option value="All">All Regions</option></select></div>
+    <div class="filter-group"><label>RM</label>
+      <select id="dl-rm"><option value="All">All RMs</option></select></div>
+    <div class="filter-group"><label>AM</label>
+      <select id="dl-am"><option value="All">All AMs</option></select></div>
+    <div class="filter-group"><label>CEC</label>
+      <select id="dl-cec"><option value="All">All CEC</option></select></div>
+    <button class="btn-reset" onclick="resetTab('dl')">Reset</button>
+  </div>
+
+  <div class="section-heading">Select Modules</div>
+  <div class="checkbox-group" id="dl-module-checks">
+    <span style="color:var(--text-muted);font-size:12px">Loading modules…</span>
+  </div>
+
+  <div class="section-heading">Select Status</div>
+  <div class="checkbox-group">
+    <label class="checkbox-item">
+      <input type="checkbox" id="dl-completed"  value="Completed"  checked> Completed
+    </label>
+    <label class="checkbox-item">
+      <input type="checkbox" id="dl-inprogress" value="In Progress" checked> In Progress
+    </label>
+    <label class="checkbox-item">
+      <input type="checkbox" id="dl-notstarted" value="Not Started" checked> Not Started
+    </label>
+  </div>
+
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px">
+    <button class="btn-download" id="btn-dl-exec" onclick="executeDownload()">
+      ⬇️ Generate Export
+    </button>
+    <span id="dl-status" style="font-size:12px;color:var(--text-secondary)"></span>
+  </div>
+</div>

@@ -1,0 +1,92 @@
+<!-- TAB 4: FM MICRO MODULES -->
+
+<!-- FILTERS -->
+<div class="filter-bar">
+  <div class="filter-group"><label>GM</label>
+    <select id="fm-gm" onchange="renderFM()"><option value="All">All GMs</option></select></div>
+  <div class="filter-group"><label>RM</label>
+    <select id="fm-rm" onchange="renderFM()"><option value="All">All RMs</option></select></div>
+  <div class="filter-group"><label>CEC</label>
+    <select id="fm-cec" onchange="renderFM()"><option value="All">All CEC</option></select></div>
+  <div class="filter-group"><label>HubZone</label>
+    <select id="fm-hubzone" onchange="renderFM()"><option value="All">All HubZones</option></select></div>
+  <button class="btn-reset" onclick="resetFMTab()">Reset</button>
+</div>
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi-card blue">
+    <div class="kpi-label">Modules</div>
+    <div class="kpi-value" id="fm-kpi-modules">—</div>
+    <div class="kpi-sub">Active modules</div>
+  </div>
+  <div class="kpi-card green">
+    <div class="kpi-label">Avg Completion</div>
+    <div class="kpi-value" id="fm-kpi-avg">—</div>
+    <div class="kpi-sub">Average across modules</div>
+  </div>
+  <div class="kpi-card amber">
+    <div class="kpi-label">Unique Employees</div>
+    <div class="kpi-value" id="fm-kpi-users">—</div>
+    <div class="kpi-sub">Assigned employees</div>
+  </div>
+</div>
+
+<!-- MODULE-WISE COMPLETION TABLE -->
+<div class="section-heading">Module-Wise Completion (Blank = Not Assigned — Excluded)</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Module Name</th>
+        <th class="center">Assigned</th>
+        <th class="center">Completed</th>
+        <th class="center">In Progress</th>
+        <th class="center">Not Started</th>
+        <th class="center">Completion %</th>
+      </tr>
+    </thead>
+    <tbody id="fm-mod-tbody">
+      <tr><td colspan="7" class="center muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- DIMENSION BREAKDOWN -->
+<div class="section-heading">Dimension Breakdown</div>
+<div class="dim-tab-bar">
+  <button class="dim-tab-btn active" onclick="switchFMDim('gm', this)">GM</button>
+  <button class="dim-tab-btn" onclick="switchFMDim('rm', this)">RM</button>
+  <button class="dim-tab-btn" onclick="switchFMDim('cec', this)">CEC</button>
+  <button class="dim-tab-btn" onclick="switchFMDim('hubzone', this)">HubZone</button>
+</div>
+<div class="table-wrap scrollable">
+  <table>
+    <thead id="fm-dim-thead"></thead>
+    <tbody id="fm-dim-tbody">
+      <tr><td colspan="7" class="center muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- HUB WISE SEARCH -->
+<div class="search-section">
+  <div class="section-heading" style="margin-top:0">🏭 Hub Wise Search</div>
+  <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">
+    Select a hub zone to see all employees and their module status.
+    Blank = not assigned (shown as <strong>—</strong>).
+  </p>
+  <div class="live-search-bar" style="align-items:center;gap:12px">
+    <select id="fm-hub-select" class="live-search-input"
+            style="max-width:340px;padding:9px 14px;font-size:13px"
+            onchange="renderFMHubTable(this.value)">
+      <option value="">— Select a Hub Zone —</option>
+    </select>
+    <button class="btn-clear-search" onclick="clearFMHubSearch()">✕ Clear</button>
+  </div>
+  <div id="fm-hub-stats" class="live-search-stats"></div>
+  <div id="fm-hub-results" class="live-search-results" style="overflow-x:auto">
+    <div class="fm-hub-placeholder">Select a hub above to view employee details</div>
+  </div>
+</div>

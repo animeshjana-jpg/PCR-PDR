@@ -1,0 +1,63 @@
+<!-- TAB 1: OVERVIEW -->
+<div class="filter-bar">
+  <div class="filter-group"><label>Month</label>
+    <select id="ov-month" onchange="renderAll()"><option value="All">All Months</option></select></div>
+  <div class="filter-group"><label>Zone</label>
+    <select id="ov-zone" onchange="renderAll()"><option value="All">All Zones</option></select></div>
+  <div class="filter-group"><label>GM</label>
+    <select id="ov-gm" onchange="renderAll()"><option value="All">All GMs</option></select></div>
+  <div class="filter-group"><label>CEC</label>
+    <select id="ov-cec" onchange="renderAll()"><option value="All">All CEC</option></select></div>
+  <div class="filter-group"><label>Role</label>
+    <select id="ov-role" onchange="renderAll()">
+      <option value="All">All Roles</option>
+      <option value="Wishmaster">Wishmasters</option>
+      <option value="HMT">HMT (Non-WM)</option>
+    </select>
+  </div>
+  <button class="btn-reset" onclick="resetTab('ov')">Reset</button>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi-card blue">
+    <div class="kpi-label">Modules</div>
+    <div class="kpi-value" id="ov-total">—</div>
+    <div class="kpi-sub">Active modules</div>
+  </div>
+  <div class="kpi-card green">
+    <div class="kpi-label">Avg Completion</div>
+    <div class="kpi-value" id="ov-avg">—</div>
+    <div class="kpi-sub">Average across all modules</div>
+  </div>
+  <div class="kpi-card amber">
+    <div class="kpi-label">Wishmasters</div>
+    <div class="kpi-value" id="ov-wm-count">—</div>
+    <div class="kpi-sub">Unique WM employees</div>
+  </div>
+  <div class="kpi-card blue">
+    <div class="kpi-label">HMT</div>
+    <div class="kpi-value" id="ov-hmt-count">—</div>
+    <div class="kpi-sub">Unique Non-WM employees</div>
+  </div>
+</div>
+
+<div class="section-heading">Module-Wise Completion (Blank = Not Assigned — Excluded)</div>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Module Name</th>
+        <th class="center">Date of Assignment</th>
+        <th class="center">Duration (Min)</th>
+        <th class="center">Assigned</th>
+        <th class="center">Completed</th>
+        <th class="center">In Progress</th>
+        <th class="center">Not Started</th>
+        <th class="center">Completion %</th>
+      </tr>
+    </thead>
+    <tbody id="ov-tbody">
+      <tr><td colspan="9" class="center muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>

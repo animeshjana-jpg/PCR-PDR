@@ -1,0 +1,168 @@
+<!-- TAB 2: FIELD VIEW -->
+<div class="filter-bar">
+  <div class="filter-group"><label>Month</label>
+    <select id="dr-month" onchange="renderAll()"><option value="All">All Months</option></select></div>
+  <div class="filter-group"><label>Zone</label>
+    <select id="dr-zone" onchange="renderAll()"><option value="All">All Zones</option></select></div>
+  <div class="filter-group"><label>GM</label>
+    <select id="dr-gm" onchange="renderAll()"><option value="All">All GMs</option></select></div>
+  <div class="filter-group"><label>Region</label>
+    <select id="dr-region" onchange="renderAll()"><option value="All">All Regions</option></select></div>
+  <div class="filter-group"><label>RM</label>
+    <select id="dr-rm" onchange="renderAll()"><option value="All">All RMs</option></select></div>
+  <div class="filter-group"><label>AM</label>
+    <select id="dr-am" onchange="renderAll()"><option value="All">All AMs</option></select></div>
+  <div class="filter-group"><label>LBP</label>
+    <select id="dr-lbp" onchange="renderAll()"><option value="All">All LBP</option></select></div>
+  <div class="filter-group"><label>CEC</label>
+    <select id="dr-cec" onchange="renderAll()"><option value="All">All CEC</option></select></div>
+  <button class="btn-reset" onclick="resetTab('dr')">Reset</button>
+</div>
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi-card yellow">
+    <div class="kpi-label">Overall Completion</div>
+    <div class="kpi-value" id="dr-overall-pct">—</div>
+    <div class="kpi-sub">Avg of all module %</div>
+  </div>
+  <div class="kpi-card blue">
+    <div class="kpi-label">Total Modules</div>
+    <div class="kpi-value" id="dr-total-modules">—</div>
+    <div class="kpi-sub">Active modules</div>
+  </div>
+  <div class="kpi-card green">
+    <div class="kpi-label">Unique Users</div>
+    <div class="kpi-value" id="dr-unique-users">—</div>
+    <div class="kpi-sub">Assigned employees</div>
+  </div>
+  <div class="kpi-card blue">
+    <div class="kpi-label">Wishmasters</div>
+    <div class="kpi-value" id="dr-unique-wm">—</div>
+    <div class="kpi-sub">WM role employees</div>
+  </div>
+  <div class="kpi-card yellow">
+    <div class="kpi-label">HMT</div>
+    <div class="kpi-value" id="dr-unique-hmt">—</div>
+    <div class="kpi-sub">Non-WM employees</div>
+  </div>
+</div>
+
+<!-- MODULE BOXES -->
+<div class="section-heading">Module-Wise Completion (Blank Excluded)</div>
+<div class="module-box-grid" id="dr-module-boxes">
+  <div style="color:var(--text-muted);font-size:12px;padding:10px">Loading…</div>
+</div>
+
+<!-- ZONE × MODULE TABLE -->
+<div class="section-heading">Zone-Wise Module Breakdown</div>
+<div class="table-wrap scrollable">
+  <table id="dr-zone-table">
+    <thead id="dr-zone-thead"></thead>
+    <tbody id="dr-zone-tbody">
+      <tr><td colspan="22" class="center muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- GM + REGION -->
+<div class="section-heading">GM-Wise &amp; Region-Wise</div>
+<div class="half-frame-row">
+  <div class="half-frame">
+    <div class="half-frame-title">GM Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>GM Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-gm-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="half-frame">
+    <div class="half-frame-title">Region Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>Region Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-region-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- RM + AM -->
+<div class="section-heading">RM-Wise &amp; AM-Wise</div>
+<div class="half-frame-row">
+  <div class="half-frame">
+    <div class="half-frame-title">RM Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>RM Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-rm-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="half-frame">
+    <div class="half-frame-title">AM Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>AM Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-am-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- LBP + CEC -->
+<div class="section-heading">LBP-Wise &amp; CEC-Wise</div>
+<div class="half-frame-row">
+  <div class="half-frame">
+    <div class="half-frame-title">LBP Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>LBP Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-lbp-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="half-frame">
+    <div class="half-frame-title">CEC Wise</div>
+    <div class="table-wrap scrollable half-scroll">
+      <table><thead><tr>
+        <th>#</th><th>CEC Name</th>
+        <th class="center">Modules</th><th class="center">Audience</th>
+        <th class="center">Pending</th><th class="center">Avg %</th>
+      </tr></thead>
+      <tbody id="dr-cec-tbody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- HUB TABLE -->
+<div class="section-heading">Hub-Wise View</div>
+<div class="table-wrap scrollable">
+  <table><thead><tr>
+    <th>#</th><th>Hub Name</th><th>Zone</th>
+    <th class="center">Assigned</th>
+    <th class="center">Completed</th>
+    <th class="center">In Progress</th>
+    <th class="center">Not Started</th>
+    <th class="center">Completion %</th>
+  </tr></thead>
+  <tbody id="dr-hub-tbody"><tr><td colspan="8" class="center muted">Loading…</td></tr></tbody>
+  </table>
+</div>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LMS Micro Module Dashboard</title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo-box"><span class="logo-fk">F</span></div>
+    <div>
+      <div class="header-title">LMS Micro Module Dashboard</div>
+      <div class="header-sub">Flipkart L&D · Supply Chain &amp; Last Mile</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <!-- Admin only — shown via JS -->
+    <div id="admin-bar" style="display:none;align-items:center;gap:10px">
+      <button class="btn-refresh-data" id="btn-refresh" onclick="adminRefresh()">
+        🔄 Refresh Data
+      </button>
+    </div>
+    <span id="last-render" class="refresh-label"></span>
+    <button class="btn-icon" onclick="reloadDashboard()" title="Reload">⟳</button>
+  </div>
+</header>
+
+<!-- REFRESH OVERLAY (admin) -->
+<div id="refresh-overlay" class="refresh-overlay">
+  <div class="refresh-card">
+    <div style="font-size:44px;margin-bottom:12px">🔄</div>
+    <div class="refresh-title">Refreshing Data</div>
+    <div class="refresh-sub">Reading CSV from Drive…<br>Takes 5–10 seconds.<br>Dashboard reloads automatically.</div>
+    <div class="refresh-spinner" id="ref-spinner"></div>
+    <div id="refresh-result" class="refresh-result"></div>
+    <button id="ref-close" class="btn-apply" style="display:none;margin-top:16px" onclick="closeRefreshOverlay()">Continue</button>
+  </div>
+</div>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
+  <button class="tab-btn" data-tab="drill"    onclick="switchTab('drill')">🏭 Detailed View</button>
+  <button class="tab-btn" data-tab="download" onclick="switchTab('download')">🔍 Search &amp; Download</button>
+  <button class="tab-btn" data-tab="fm"       onclick="switchTab('fm')">📦 FM Micro Modules</button>
+</nav>
+
+<main class="main-content">
+  <div id="global-loader" class="global-loader">
+    <div class="spinner"></div>
+    <p id="loader-msg">Loading dashboard data…</p>
+  </div>
+
+  <div id="tab-overview" class="tab-panel active"><?!= include('Tab_Overview'); ?></div>
+  <div id="tab-drill"    class="tab-panel"><?!= include('Tab_Drill'); ?></div>
+  <div id="tab-download" class="tab-panel"><?!= include('Tab_Download'); ?></div>
+  <div id="tab-fm"       class="tab-panel"><?!= include('Tab_FM'); ?></div>
+</main>
+
+<?!= include('Scripts'); ?>
+</body>
+</html>
