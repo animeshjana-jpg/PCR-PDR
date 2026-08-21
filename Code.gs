@@ -24,7 +24,7 @@ const COL = {
 
 // FM CSV column mapping (0-indexed)
 const FM_COL = {
-  GM: 0, RM: 1, CEC: 2, ID: 3, AGENT: 4, HUBZONE: 6, MOD_START: 8
+  GM: 0, RM: 1, CEC: 2, ID: 3, AGENT: 4, HUBNAME: 5, HUBZONE: 6, MOD_START: 8
 };
 
 // ============================================================
@@ -261,7 +261,7 @@ function readFMCSV() {
     modules.push({ idx: c - FM_COL.MOD_START, name, month: '', date: '', duration: '' });
   }
 
-  const dict = { gm: [], rm: [], cec: [], hubzone: [] };
+  const dict = { gm: [], rm: [], cec: [], hubname: [], hubzone: [] };
   const getIdx = (key, val) => {
     if (!val) return -1;
     let i = dict[key].indexOf(val);
@@ -292,6 +292,7 @@ function readFMCSV() {
       getIdx('gm',      String(r[FM_COL.GM]      || '').trim()),
       getIdx('rm',      String(r[FM_COL.RM]       || '').trim()),
       getIdx('cec',     String(r[FM_COL.CEC]      || '').trim()),
+      getIdx('hubname', String(r[FM_COL.HUBNAME]  || '').trim()),
       getIdx('hubzone', String(r[FM_COL.HUBZONE]  || '').trim()),
       ...modStats
     ]);

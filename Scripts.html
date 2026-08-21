@@ -615,10 +615,10 @@ function executeDownload() {
 
 // ============================================================
 // FM MICRO MODULES TAB
-// FM Row (expanded): [id, agent, gm, rm, cec, hubzone, ...modStats]
+// FM Row (expanded): [id, agent, gm, rm, cec, hubname, hubzone, ...modStats]
 // ============================================================
-const FM_F = { ID:0, AGENT:1, GM:2, RM:3, CEC:4, HUBZONE:5 };
-const FM_MOD_OFFSET = 6;
+const FM_F = { ID:0, AGENT:1, GM:2, RM:3, CEC:4, HUBNAME:5, HUBZONE:6 };
+const FM_MOD_OFFSET = 7;
 
 let FM_ALL_ROWS   = [];
 let FM_MODULES    = [];
@@ -650,8 +650,9 @@ function onFMDataLoaded(data) {
     getVal('gm',      r[2]),
     getVal('rm',      r[3]),
     getVal('cec',     r[4]),
-    getVal('hubzone', r[5]),
-    ...r.slice(6).map(mapMod)
+    getVal('hubname', r[5]),
+    getVal('hubzone', r[6]),
+    ...r.slice(7).map(mapMod)
   ]);
 
   populateFMDropdowns();
@@ -816,7 +817,7 @@ function populateFMDropdowns() {
 function populateFMHubSelect() {
   const sel = document.getElementById('fm-hub-select');
   if (!sel) return;
-  const hubs = [...new Set(FM_ALL_ROWS.map(r => r[FM_F.HUBZONE] ? r[FM_F.HUBZONE].toUpperCase() : '').filter(v => v && v.trim()))].sort();
+  const hubs = [...new Set(FM_ALL_ROWS.map(r => r[FM_F.HUBNAME] ? r[FM_F.HUBNAME].toUpperCase() : '').filter(v => v && v.trim()))].sort();
   sel.innerHTML = '<option value="">— Select a Hub Zone —</option>';
   hubs.forEach(h => {
     const o = document.createElement('option');
@@ -834,7 +835,7 @@ function renderFMHubTable(hub) {
   }
 
   const targetHub = hub.toUpperCase();
-  const hubRows   = FM_ALL_ROWS.filter(r => r[FM_F.HUBZONE] && r[FM_F.HUBZONE].toUpperCase() === targetHub);
+  const hubRows   = FM_ALL_ROWS.filter(r => r[FM_F.HUBNAME] && r[FM_F.HUBNAME].toUpperCase() === targetHub);
 
   if (!hubRows.length) { stats.textContent='No employees found for this hub zone.'; res.innerHTML=''; return; }
 
