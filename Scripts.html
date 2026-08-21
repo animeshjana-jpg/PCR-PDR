@@ -825,7 +825,8 @@ function renderFMDimension(dim, rows) {
 }
 
 function populateFMDropdowns() {
-  const uniq = fieldIdx => [...new Set(FM_ALL_ROWS.map(r => r[fieldIdx]))].filter(v => v && v.trim() && v !== '-' && v !== '#N/A').sort();
+  const isJunk = v => !v || !v.trim() || v === '-' || v === '#N/A' || /^0x[0-9a-f]+$/i.test(v.trim());
+  const uniq = fieldIdx => [...new Set(FM_ALL_ROWS.map(r => r[fieldIdx]))].filter(v => !isJunk(v)).sort();
   setOpts('fm-gm',      uniq(FM_F.GM),      'All GMs');
   setOpts('fm-rm',      uniq(FM_F.RM),       'All RMs');
   setOpts('fm-cec',     uniq(FM_F.CEC),      'All CEC');
@@ -835,7 +836,8 @@ function populateFMDropdowns() {
 function populateFMHubSelect() {
   const sel = document.getElementById('fm-hub-select');
   if (!sel) return;
-  const hubs = [...new Set(FM_ALL_ROWS.map(r => r[FM_F.HUBNAME] ? r[FM_F.HUBNAME].toUpperCase() : '').filter(v => v && v.trim()))].sort();
+  const isJunk = v => !v || !v.trim() || v === '-' || v === '#N/A' || /^0x[0-9a-f]+$/i.test(v.trim());
+  const hubs = [...new Set(FM_ALL_ROWS.map(r => r[FM_F.HUBNAME] ? r[FM_F.HUBNAME].toUpperCase() : '').filter(v => !isJunk(v)))].sort();
   sel.innerHTML = '<option value="">— Select a Hub Zone —</option>';
   hubs.forEach(h => {
     const o = document.createElement('option');
