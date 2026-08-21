@@ -275,6 +275,7 @@ function readFMCSV() {
 
     const modStats = modules.map(m => {
       const v = String(r[FM_COL.MOD_START + m.idx] || '').trim().toLowerCase();
+      if (!v || v === '-') return '';  // dash = not assigned, exclude
       if (v === 'completed') return 'C';
       if (v === 'in progress') return 'I';
       if (v === 'not started') return 'N';
