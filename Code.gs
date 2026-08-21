@@ -13,7 +13,7 @@ const CONFIG = {
   ADMIN_EMAILS:     ['animesh.jana@flipkart.com'],
   EXPORT_FOLDER_ID: '1w9Nj7hOG1CYqeNE-6-vN7QaRrx5fdorq',
   CACHE_KEY:        'LMS_CSV_DATA_v8_COMPRESSED',
-  FM_CACHE_KEY:     'LMS_FM_DATA_v1_COMPRESSED',
+  FM_CACHE_KEY:     'LMS_FM_DATA_v2_COMPRESSED',
   CACHE_SECS:       21600,
   CHUNK_SIZE:       90000
 };
