@@ -85,12 +85,14 @@ function getCache(key) {
 
 function clearCache() {
   const cache = CacheService.getScriptCache();
-  const n     = cache.get(CONFIG.CACHE_KEY + '_n');
-  if (!n) return;
-  const count = Number(n);
-  const keys  = [CONFIG.CACHE_KEY + '_n'];
-  for (let i = 0; i < count; i++) keys.push(CONFIG.CACHE_KEY + '_' + i);
-  cache.removeAll(keys);
+  [CONFIG.CACHE_KEY, CONFIG.FM_CACHE_KEY].forEach(baseKey => {
+    const n = cache.get(baseKey + '_n');
+    if (!n) return;
+    const count = Number(n);
+    const keys  = [baseKey + '_n'];
+    for (let i = 0; i < count; i++) keys.push(baseKey + '_' + i);
+    cache.removeAll(keys);
+  });
 }
 
 function readModuleDateMap() {

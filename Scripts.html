@@ -20,14 +20,6 @@ let ACTIVE_TAB = 'overview';
 window.onload = function() {
   showLoader(true, 'Loading dashboard data…');
   google.script.run
-    .withSuccessHandler(function(s) {
-      if (s.isAdmin) {
-        const bar = document.getElementById('admin-bar');
-        if (bar) bar.style.display = 'flex';
-      }
-    }).withFailureHandler(function(){}).getSessionInfo();
-
-  google.script.run
     .withSuccessHandler(onDataLoaded)
     .withFailureHandler(handleError)
     .loadDashboardData();
@@ -93,6 +85,10 @@ function adminRefresh() {
           closeRefreshOverlay();
           showLoader(true,'Loading fresh data…');
           google.script.run.withSuccessHandler(onDataLoaded).withFailureHandler(handleError).loadDashboardData();
+          if (FM_LOADED) {
+            FM_LOADED = false;
+            loadFMTab();
+          }
         }, 1800);
       }
     })
