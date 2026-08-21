@@ -317,7 +317,20 @@ function loadFMDashboardData() {
 }
 
 // ============================================================
-// DOWNLOAD GENERATOR
+// HELPERS
+// ============================================================
+function createGSheet(fileName, sheetData) {
+  const ss    = SpreadsheetApp.create(fileName);
+  const sheet = ss.getActiveSheet();
+  sheet.getRange(1, 1, sheetData.length, sheetData[0].length).setValues(sheetData);
+  const file  = DriveApp.getFileById(ss.getId());
+  DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID).addFile(file);
+  DriveApp.getRootFolder().removeFile(file);
+  return { url: ss.getUrl(), name: ss.getName() };
+}
+
+// ============================================================
+// DOWNLOAD GENERATOR — LMS
 // ============================================================
 function generateDownload(filters, selectedModuleNames, selectedStatuses) {
   try {
@@ -334,23 +347,13 @@ function generateDownload(filters, selectedModuleNames, selectedStatuses) {
 
     const sl = selectedStatuses ? selectedStatuses.map(s => s.toLowerCase()) : [];
 
-    const expHeaders = [
+    const headers = [
       'Employee ID','Agent Name','Hub','Role','Region','AM','RM','GM','CEC','LBP','Zone',
       ...selMods.map(m => m.name)
     ];
 
-    const escapeCsv = (val) => {
-      let str = String(val || '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return '"' + str.replace(/"/g, '""') + '"';
-      }
-      return str;
-    };
+    const sheetData = [headers];
 
-    const csvRows = [];
-    csvRows.push(expHeaders.map(escapeCsv).join(','));
-
-    let count = 0;
     rows.forEach(r => {
       const rowZone   = getVal('zone', r[10]);
       const rowGm     = getVal('gm', r[7]);
@@ -377,25 +380,70 @@ function generateDownload(filters, selectedModuleNames, selectedStatuses) {
         if (modVals.every(v => !v)) return;
       }
 
-      const modDisplay = modVals.map(v => v || 'Not Assigned');
-      const rowArr = [
-        r[0], r[1], getVal('hub', r[2]), getVal('role', r[3]), rowRegion, rowAm, rowRm, rowGm, rowCec, rowLbp, rowZone,
-        ...modDisplay
-      ];
-
-      csvRows.push(rowArr.map(escapeCsv).join(','));
-      count++;
+      sheetData.push([
+        r[0], r[1], getVal('hub', r[2]), getVal('role', r[3]),
+        rowRegion, rowAm, rowRm, rowGm, rowCec, rowLbp, rowZone,
+        ...modVals.map(v => v || 'Not Assigned')
+      ]);
     });
 
+    const count = sheetData.length - 1;
     if (count === 0) return { error: 'No records match the selected filters.' };
 
-    const csvContent = csvRows.join('\n');
-    const fileName = 'LMS_Export_' + new Date().toISOString().slice(0,10) + '.csv';
+    const fileName = 'LMS_Export_' + new Date().toISOString().slice(0,10);
+    const result = createGSheet(fileName, sheetData);
+    return { ...result, count };
+  } catch(e) {
+    return { error: '❌ ' + e.message };
+  }
+}
 
-    const folder = DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID);
-    const file = folder.createFile(fileName, csvContent, MimeType.CSV);
+// ============================================================
+// DOWNLOAD GENERATOR — FM
+// ============================================================
+function generateFMDownload(filters) {
+  try {
+    const data = getCache(CONFIG.FM_CACHE_KEY) || readFMCSV();
+    if (!data) return { error: 'No FM data. Please reload the dashboard first.' };
 
-    return { url: file.getUrl(), name: file.getName(), count: count };
+    const { rows, modules, dict } = data;
+    const getVal = (key, idx) => idx === -1 ? '' : (dict[key] ? dict[key][idx] : '');
+    const mapMod = (v) => v === 'C' ? 'Completed' : v === 'I' ? 'In Progress' : v === 'N' ? 'Not Started' : '';
+
+    const headers = [
+      'Employee ID', 'Agent Name', 'GM', 'RM', 'CEC', 'Hub Name', 'Hub Zone',
+      ...modules.map(m => m.name)
+    ];
+
+    const sheetData = [headers];
+
+    rows.forEach(r => {
+      const rowGm      = getVal('gm',      r[2]);
+      const rowRm      = getVal('rm',      r[3]);
+      const rowCec     = getVal('cec',     r[4]);
+      const rowHubName = getVal('hubname', r[5]);
+      const rowHubZone = getVal('hubzone', r[6]);
+
+      if (filters.gm      && filters.gm      !== 'All' && rowGm      !== filters.gm)      return;
+      if (filters.rm      && filters.rm      !== 'All' && rowRm      !== filters.rm)      return;
+      if (filters.cec     && filters.cec     !== 'All' && rowCec     !== filters.cec)     return;
+      if (filters.hubzone && filters.hubzone !== 'All' && rowHubZone !== filters.hubzone) return;
+
+      const modVals = modules.map(m => mapMod(r[7 + m.idx]) || '');
+      if (modVals.every(v => !v)) return;
+
+      sheetData.push([
+        r[0], r[1], rowGm, rowRm, rowCec, rowHubName, rowHubZone,
+        ...modVals.map(v => v || 'Not Assigned')
+      ]);
+    });
+
+    const count = sheetData.length - 1;
+    if (count === 0) return { error: 'No records match the selected filters.' };
+
+    const fileName = 'FM_Export_' + new Date().toISOString().slice(0,10);
+    const result = createGSheet(fileName, sheetData);
+    return { ...result, count };
   } catch(e) {
     return { error: '❌ ' + e.message };
   }

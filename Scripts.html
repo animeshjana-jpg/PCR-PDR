@@ -601,16 +601,34 @@ function executeDownload() {
     .withSuccessHandler(function(res){
       showLoader(false); btn.disabled=false;
       if(res.error){lbl.textContent='❌ '+res.error;return;}
-      lbl.innerHTML = `✅ ${res.count.toLocaleString()} records!
+      lbl.innerHTML = `✅ ${res.count.toLocaleString()} records exported!
         <a href="${res.url}" target="_blank" style="color:#0d9488;font-weight:700;margin-left:6px;text-decoration:underline;">
-          Open "${res.name}"
-        </a>
-        <span style="color:var(--text-muted);font-size:11px;margin-left:6px;">
-          (Click "Open with Google Sheets" at the top of the preview)
-        </span>`;
+          📊 Open Google Sheet
+        </a>`;
     })
     .withFailureHandler(function(e){ showLoader(false); btn.disabled=false; lbl.textContent='❌ '+e.message; })
     .generateDownload(getDlFilters(), mods, stat);
+}
+
+function executeFMDownload() {
+  const btn = document.getElementById('btn-fm-dl');
+  const lbl = document.getElementById('fm-dl-status');
+  btn.disabled = true;
+  lbl.textContent = '⏳ Generating…';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      if (res.error) { lbl.textContent = '❌ ' + res.error; return; }
+      lbl.innerHTML = `✅ ${res.count.toLocaleString()} records exported!
+        <a href="${res.url}" target="_blank" style="color:#0d9488;font-weight:700;margin-left:6px;text-decoration:underline;">
+          📊 Open Google Sheet
+        </a>`;
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false;
+      lbl.textContent = '❌ ' + e.message;
+    })
+    .generateFMDownload(getFMFilters());
 }
 
 // ============================================================
