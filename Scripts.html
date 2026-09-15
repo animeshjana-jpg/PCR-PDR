@@ -23,6 +23,10 @@ window.onload = function() {
     .withSuccessHandler(onDataLoaded)
     .withFailureHandler(handleError)
     .loadDashboardData();
+  document.addEventListener('click', function() {
+    const dd = document.getElementById('dr-mod-dropdown');
+    if (dd) dd.style.display = 'none';
+  });
 };
 
 function onDataLoaded(data) {
@@ -183,23 +187,42 @@ function getDrSelectedMods(month) {
 }
 
 function populateDrModules() {
-  const container = document.getElementById('dr-module-checks');
-  if (!container) return;
-  container.innerHTML =
-    `<label class="checkbox-item" style="border-color:var(--fk-blue)">
+  const dd = document.getElementById('dr-mod-dropdown');
+  if (!dd) return;
+  dd.innerHTML =
+    `<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;font-weight:600;
+                   border-bottom:1px solid var(--border-color);cursor:pointer;font-size:13px">
        <input type="checkbox" id="dr-all" onclick="toggleDrMods(this)" checked>
-       <strong>Select All</strong>
+       Select All
      </label>` +
     MODULES.map((m, i) =>
-      `<label class="checkbox-item">
-         <input type="checkbox" class="dr-mod" value="${m.name}" checked onchange="renderAll()">
+      `<label style="display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:13px">
+         <input type="checkbox" class="dr-mod" value="${m.name}" checked
+                onchange="updateDrModLabel();renderAll()">
          ${i+1}. ${m.name}
        </label>`).join('');
+  updateDrModLabel();
+}
+
+function updateDrModLabel() {
+  const all     = document.querySelectorAll('.dr-mod').length;
+  const checked = document.querySelectorAll('.dr-mod:checked').length;
+  const lbl     = document.getElementById('dr-mod-label');
+  if (lbl) lbl.textContent = checked === all ? 'All Modules' : checked + ' selected';
+  const master = document.getElementById('dr-all');
+  if (master) master.indeterminate = checked > 0 && checked < all;
 }
 
 function toggleDrMods(master) {
   document.querySelectorAll('.dr-mod').forEach(cb => { cb.checked = master.checked; });
+  updateDrModLabel();
   renderAll();
+}
+
+function toggleDrModDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('dr-mod-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
 }
 
 function resetTab(prefix) {
@@ -209,7 +232,7 @@ function resetTab(prefix) {
   });
   if (prefix === 'dr') {
     const allBox = document.getElementById('dr-all');
-    if (allBox) { allBox.checked = true; document.querySelectorAll('.dr-mod').forEach(cb => cb.checked = true); }
+    if (allBox) { allBox.checked = true; allBox.indeterminate = false; document.querySelectorAll('.dr-mod').forEach(cb => cb.checked = true); updateDrModLabel(); }
   }
   renderAll();
 }
