@@ -53,6 +53,7 @@ function onDataLoaded(data) {
 
   populateDropdowns();
   populateDownloadModules();
+  populateDrModules();
   populateHubSelect();
   renderAll();
 }
@@ -142,7 +143,7 @@ function getOvFilters() {
 function getDrFilters() {
   return { month:g('dr-month'), zone:g('dr-zone'), gm:g('dr-gm'), region:g('dr-region'),
            rm:g('dr-rm'), am:g('dr-am'), lbp:g('dr-lbp'), cec:g('dr-cec'),
-           role:'All' };
+           role: g('dr-role') };
 }
 function getDlFilters() {
   return { month:g('dl-month'), zone:g('dl-zone'), gm:g('dl-gm'), region:g('dl-region'),
@@ -152,9 +153,11 @@ function getDlFilters() {
 function filterRows(rows, f) {
   return rows.filter(r => {
     if (f.role && f.role !== 'All') {
-      const isWM = r[F.role] && r[F.role].toLowerCase().includes('wish');
-      if (f.role === 'Wishmaster' && !isWM) return false;
-      if (f.role === 'HMT' && isWM) return false;
+      const roleLC = (r[F.role] || '').trim().toLowerCase();
+      const isWM  = ['wish master', 'wm'].includes(roleLC);
+      const isHMT = ['hmt', 'sorter', 'partner hmt'].includes(roleLC);
+      if (f.role === 'Wish Master' && !isWM)  return false;
+      if (f.role === 'HMT'        && !isHMT) return false;
     }
     if (f.zone   && f.zone   !== 'All' && r[F.zone]   !== f.zone)   return false;
     if (f.gm     && f.gm     !== 'All' && r[F.gm]     !== f.gm)     return false;
@@ -172,11 +175,42 @@ function getVisibleModules(monthFilter) {
   return MODULES.filter(m => m.month === monthFilter);
 }
 
+function getDrSelectedMods(month) {
+  const base    = getVisibleModules(month);
+  const checked = [...document.querySelectorAll('.dr-mod:checked')].map(c => c.value);
+  if (!checked.length) return base;
+  return base.filter(m => checked.includes(m.name));
+}
+
+function populateDrModules() {
+  const container = document.getElementById('dr-module-checks');
+  if (!container) return;
+  container.innerHTML =
+    `<label class="checkbox-item" style="border-color:var(--fk-blue)">
+       <input type="checkbox" id="dr-all" onclick="toggleDrMods(this)" checked>
+       <strong>Select All</strong>
+     </label>` +
+    MODULES.map((m, i) =>
+      `<label class="checkbox-item">
+         <input type="checkbox" class="dr-mod" value="${m.name}" checked onchange="renderAll()">
+         ${i+1}. ${m.name}
+       </label>`).join('');
+}
+
+function toggleDrMods(master) {
+  document.querySelectorAll('.dr-mod').forEach(cb => { cb.checked = master.checked; });
+  renderAll();
+}
+
 function resetTab(prefix) {
   ['month','zone','gm','region','rm','am','lbp','cec','role'].forEach(k => {
     const el = document.getElementById(prefix+'-'+k);
     if (el) el.value = 'All';
   });
+  if (prefix === 'dr') {
+    const allBox = document.getElementById('dr-all');
+    if (allBox) { allBox.checked = true; document.querySelectorAll('.dr-mod').forEach(cb => cb.checked = true); }
+  }
   renderAll();
 }
 
@@ -270,8 +304,9 @@ function renderOverview(rows, f) {
   const total    = withData.length;
   const avg      = total > 0 ? Math.round(withData.reduce((a,s)=>a+(s.pct||0),0)/total) : 0;
 
-  const uWM  = new Set(effectiveRows.filter(r=>r[F.role]&&r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
-  const uHMT = new Set(effectiveRows.filter(r=>!r[F.role]||!r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
+  const _wmR = ['wish master','wm'], _hmtR = ['hmt','sorter','partner hmt'];
+  const uWM  = new Set(effectiveRows.filter(r=>_wmR.includes((r[F.role]||'').trim().toLowerCase())).map(r=>r[F.id]).filter(Boolean)).size;
+  const uHMT = new Set(effectiveRows.filter(r=>_hmtR.includes((r[F.role]||'').trim().toLowerCase())).map(r=>r[F.id]).filter(Boolean)).size;
 
   document.getElementById('ov-total').textContent    = visMods.length;
   document.getElementById('ov-avg').textContent      = total > 0 ? avg+'%' : '—';
@@ -298,18 +333,20 @@ function renderOverview(rows, f) {
 // TAB 2: DETAILED VIEW
 // ============================================================
 function renderDrill(rows, f) {
-  const visMods = getVisibleModules(f.month);
-  const stats   = visMods.map(m => ({ ...m, ...modStats(rows, m.idx) }));
+  const visMods  = getDrSelectedMods(f.month);
+  const stats    = visMods.map(m => ({ ...m, ...modStats(rows, m.idx) }));
   const withData = stats.filter(s => s.assigned > 0);
 
-  const effectiveRows = f.month && f.month !== 'All'
+  const effectiveRows = visMods.length < MODULES.length || (f.month && f.month !== 'All')
     ? rows.filter(r => visMods.some(m => { const v=r[MOD_OFFSET+m.idx]; return v&&v.trim(); }))
     : rows;
 
   const overall  = withData.length>0 ? Math.round(withData.reduce((a,s)=>a+(s.pct||0),0)/withData.length) : 0;
   const uUsers   = new Set(effectiveRows.map(r=>r[F.id]).filter(Boolean)).size;
-  const uWM      = new Set(effectiveRows.filter(r=>r[F.role]&&r[F.role].toLowerCase().includes('wish')).map(r=>r[F.id]).filter(Boolean)).size;
-  const uHMT     = uUsers - uWM;
+  const wmRoles  = ['wish master','wm'];
+  const hmtRoles = ['hmt','sorter','partner hmt'];
+  const uWM      = new Set(effectiveRows.filter(r=>wmRoles.includes((r[F.role]||'').trim().toLowerCase())).map(r=>r[F.id]).filter(Boolean)).size;
+  const uHMT     = new Set(effectiveRows.filter(r=>hmtRoles.includes((r[F.role]||'').trim().toLowerCase())).map(r=>r[F.id]).filter(Boolean)).size;
 
   const ovEl = document.getElementById('dr-overall-pct');
   ovEl.textContent = overall+'%'; ovEl.style.color = pillColor(overall);
